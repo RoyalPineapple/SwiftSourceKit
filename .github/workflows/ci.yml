@@ -38,14 +38,3 @@ jobs:
       - uses: actions/checkout@v4
       - name: SourceKitD probe
         run: swift run SourceKitDProbe
-
-  test:
-    runs-on: macos-15
-    needs:
-      - shim-verify
-      - test-debug
-      - test-release
-      - sourcekitd-probe
-    steps:
-      - name: Required status compatibility
-        run: echo "All split CI checks passed"

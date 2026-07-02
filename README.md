@@ -51,4 +51,4 @@ swift test
 swift test -c release
 ```
 
-Most unsafe-boundary coverage uses a fake sourcekitd dylib built from `Tests/Fixtures/FakeSourceKitD`. Some smoke tests query a live local `sourcekitd.framework` when it is available.
+Some smoke tests query a live local `sourcekitd.framework` when it is available.

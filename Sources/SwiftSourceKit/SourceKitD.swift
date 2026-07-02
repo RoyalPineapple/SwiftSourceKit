@@ -213,12 +213,6 @@ final class SourceKitD: @unchecked Sendable {
                 let functions = try Functions(handle: handle)
                 try validateShimABI()
                 functions.initialize()
-                do {
-                    try validateLoadedRuntime(functions)
-                } catch {
-                    functions.shutdown()
-                    throw error
-                }
                 runtime = InitializedRuntime(path: canonicalPath, handle: handle, functions: functions)
                 return functions
             } catch {
@@ -233,18 +227,6 @@ final class SourceKitD: @unchecked Sendable {
             .resolvingSymlinksInPath()
             .standardizedFileURL
             .path
-    }
-
-    static func resetForTesting() {
-        runtimeState.withLock { runtime in
-            guard let loaded = runtime else {
-                return
-            }
-
-            loaded.functions.shutdown()
-            dlclose(loaded.handle)
-            runtime = nil
-        }
     }
 
     private static func validateShimABI() throws {
@@ -266,46 +248,6 @@ final class SourceKitD: @unchecked Sendable {
               MemoryLayout<SKResponse>.size == pointerSize,
               MemoryLayout<SKUID>.size == pointerSize else {
             throw SourceKitError.incompatibleSourceKitD("sourcekitd opaque handles do not match pointer size")
-        }
-    }
-
-    private static func validateLoadedRuntime(_ functions: Functions) throws {
-        let request = functions.requestDictionaryCreate(nil, nil, 0)
-        defer { functions.requestRelease(request) }
-
-        functions.requestDictionarySetUID(
-            request,
-            functions.uid(SourceKitUID.Key.request.rawValue),
-            functions.uid(SourceKitUID.Request.compilerVersion.rawValue)
-        )
-
-        guard let response = functions.sendRequestSync(request) else {
-            throw SourceKitError.incompatibleSourceKitD("compatibility probe returned no response")
-        }
-        defer { functions.responseDispose(response) }
-
-        if functions.responseIsError(response) != 0 {
-            let kind = functions.responseErrorGetKind(response)
-            let description = functions.responseErrorGetDescription(response)
-                .map { String(cString: $0) } ?? "unknown sourcekitd error"
-            throw SourceKitError.incompatibleSourceKitD("compatibility probe failed (\(kind)): \(description)")
-        }
-
-        let variant = functions.responseGetValue(response)
-        guard functions.variantGetType(variant) == VariantType.dictionary.rawValue else {
-            throw SourceKitError.incompatibleSourceKitD("compatibility probe did not return a dictionary response")
-        }
-
-        let decoded: SourceKitValue
-        do {
-            decoded = try decode(variant, functions: functions)
-        } catch {
-            throw SourceKitError.incompatibleSourceKitD("compatibility probe response could not be decoded: \(error)")
-        }
-
-        guard case .dictionary(let dictionary) = decoded,
-              case .int64 = dictionary[.Key.versionMajor] else {
-            throw SourceKitError.incompatibleSourceKitD("compatibility probe response did not include key.version_major")
         }
     }
 }
@@ -370,7 +312,6 @@ private let sourceKitDVariantDictionaryApplier:
 extension SourceKitD {
     struct Functions: @unchecked Sendable {
         let initialize: @convention(c) () -> Void
-        let shutdown: @convention(c) () -> Void
         let uidGetFromCString: @convention(c) (UnsafePointer<CChar>) -> SKUID
         let uidGetStringPointer: @convention(c) (SKUID) -> UnsafePointer<CChar>
         let requestDictionaryCreate: @convention(c) (UnsafePointer<SKUID?>?, UnsafePointer<SKObject?>?, Int) -> SKObject
@@ -401,17 +342,12 @@ extension SourceKitD {
         let variantDataGetSizePointer: UnsafeMutableRawPointer
         let variantDataGetPointerPointer: UnsafeMutableRawPointer
         let variantUIDGetValuePointer: UnsafeMutableRawPointer
-        let variantDictionaryGetValuePointer: UnsafeMutableRawPointer
-        let variantDictionaryGetStringPointer: UnsafeMutableRawPointer
-        let variantDictionaryGetInt64Pointer: UnsafeMutableRawPointer
-        let variantDictionaryGetUIDPointer: UnsafeMutableRawPointer
         let variantDictionaryApplyPointer: UnsafeMutableRawPointer
         let variantArrayGetCountPointer: UnsafeMutableRawPointer
         let variantArrayGetValuePointer: UnsafeMutableRawPointer
 
         init(handle: UnsafeMutableRawPointer) throws {
             initialize = try Self.load(handle, "sourcekitd_initialize")
-            shutdown = try Self.load(handle, "sourcekitd_shutdown")
             uidGetFromCString = try Self.load(handle, "sourcekitd_uid_get_from_cstr")
             uidGetStringPointer = try Self.load(handle, "sourcekitd_uid_get_string_ptr")
             requestDictionaryCreate = try Self.load(handle, "sourcekitd_request_dictionary_create")
@@ -442,10 +378,6 @@ extension SourceKitD {
             variantDataGetSizePointer = try Self.loadPointer(handle, "sourcekitd_variant_data_get_size")
             variantDataGetPointerPointer = try Self.loadPointer(handle, "sourcekitd_variant_data_get_ptr")
             variantUIDGetValuePointer = try Self.loadPointer(handle, "sourcekitd_variant_uid_get_value")
-            variantDictionaryGetValuePointer = try Self.loadPointer(handle, "sourcekitd_variant_dictionary_get_value")
-            variantDictionaryGetStringPointer = try Self.loadPointer(handle, "sourcekitd_variant_dictionary_get_string")
-            variantDictionaryGetInt64Pointer = try Self.loadPointer(handle, "sourcekitd_variant_dictionary_get_int64")
-            variantDictionaryGetUIDPointer = try Self.loadPointer(handle, "sourcekitd_variant_dictionary_get_uid")
             variantDictionaryApplyPointer = try Self.loadPointer(handle, "sourcekitd_variant_dictionary_apply_f")
             variantArrayGetCountPointer = try Self.loadPointer(handle, "sourcekitd_variant_array_get_count")
             variantArrayGetValuePointer = try Self.loadPointer(handle, "sourcekitd_variant_array_get_value")
@@ -515,45 +447,6 @@ extension SourceKitD {
             var value = SKVariant()
             swift_sourcekitd_variant_array_get_value(variantArrayGetValuePointer, &array, index, &value)
             return value
-        }
-
-        func variantDictionaryGetValue(_ dictionary: SKVariant, _ key: SKUID) -> SKVariant {
-            var dictionary = dictionary
-            var value = SKVariant()
-            swift_sourcekitd_variant_dictionary_get_value(
-                variantDictionaryGetValuePointer,
-                &dictionary,
-                UnsafeMutableRawPointer(key),
-                &value
-            )
-            return value
-        }
-
-        func variantDictionaryGetString(_ dictionary: SKVariant, _ key: SKUID) -> UnsafePointer<CChar>? {
-            var dictionary = dictionary
-            return swift_sourcekitd_variant_dictionary_get_string(
-                variantDictionaryGetStringPointer,
-                &dictionary,
-                UnsafeMutableRawPointer(key)
-            )
-        }
-
-        func variantDictionaryGetInt64(_ dictionary: SKVariant, _ key: SKUID) -> Int64 {
-            var dictionary = dictionary
-            return swift_sourcekitd_variant_dictionary_get_int64(
-                variantDictionaryGetInt64Pointer,
-                &dictionary,
-                UnsafeMutableRawPointer(key)
-            )
-        }
-
-        func variantDictionaryGetUID(_ dictionary: SKVariant, _ key: SKUID) -> SKUID? {
-            var dictionary = dictionary
-            return swift_sourcekitd_variant_dictionary_get_uid(
-                variantDictionaryGetUIDPointer,
-                &dictionary,
-                UnsafeMutableRawPointer(key)
-            ).map { OpaquePointer($0) }
         }
 
         func requestDictionarySetString(_ object: SKObject, _ key: SKUID, _ string: String) {

@@ -31,10 +31,6 @@ let shimmedFunctions = Set([
     "sourcekitd_variant_data_get_size",
     "sourcekitd_variant_data_get_ptr",
     "sourcekitd_variant_uid_get_value",
-    "sourcekitd_variant_dictionary_get_value",
-    "sourcekitd_variant_dictionary_get_string",
-    "sourcekitd_variant_dictionary_get_int64",
-    "sourcekitd_variant_dictionary_get_uid",
     "sourcekitd_variant_dictionary_apply_f",
     "sourcekitd_variant_array_get_count",
     "sourcekitd_variant_array_get_value",
@@ -390,10 +386,6 @@ func runSelfTest() {
     size_t sourcekitd_variant_data_get_size(sourcekitd_variant_t variant);
     const void *sourcekitd_variant_data_get_ptr(sourcekitd_variant_t variant);
     sourcekitd_uid_t sourcekitd_variant_uid_get_value(sourcekitd_variant_t variant);
-    sourcekitd_variant_t sourcekitd_variant_dictionary_get_value(sourcekitd_variant_t dict, sourcekitd_uid_t key);
-    const char *sourcekitd_variant_dictionary_get_string(sourcekitd_variant_t dict, sourcekitd_uid_t key);
-    int64_t sourcekitd_variant_dictionary_get_int64(sourcekitd_variant_t dict, sourcekitd_uid_t key);
-    sourcekitd_uid_t sourcekitd_variant_dictionary_get_uid(sourcekitd_variant_t dict, sourcekitd_uid_t key);
     bool sourcekitd_variant_dictionary_apply_f(sourcekitd_variant_t dict, sourcekitd_variant_dictionary_applier_f_t applier, void *context);
     size_t sourcekitd_variant_array_get_count(sourcekitd_variant_t array);
     sourcekitd_variant_t sourcekitd_variant_array_get_value(sourcekitd_variant_t array, size_t index);
@@ -403,7 +395,6 @@ func runSelfTest() {
     precondition(Set(functions.map(\.name)) == shimmedFunctions, "parsed shim function set changed")
     precondition(renderHeader(functions: functions).contains("SwiftSourceKitDVariant *out"), "variant return should use out pointer")
     precondition(renderSource(functions: functions).contains("*out = ((Function)function)(response);"), "variant call should assign out value")
-    precondition(renderSource(functions: functions).contains("return ((Function)function)(*dict, key);"), "variant parameter should pass by value")
     print("SourceKitD shim generator self-test passed")
 }
 

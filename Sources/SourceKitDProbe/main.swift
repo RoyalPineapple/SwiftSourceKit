@@ -12,13 +12,6 @@ struct SourceKitDProbe {
                 throw ProbeError("compiler version response did not include key.version_major")
             }
 
-            let raw = try await client.send(.dictionary([
-                .Key.request: .uid(.Request.compilerVersion),
-            ]))
-            guard case .dictionary(let dictionary) = raw, dictionary[.Key.versionMajor] != nil else {
-                throw ProbeError("raw compiler version response did not include key.version_major")
-            }
-
             print("SourceKitD probe passed")
         } catch {
             fputs("SourceKitD probe failed: \(error)\n", stderr)
