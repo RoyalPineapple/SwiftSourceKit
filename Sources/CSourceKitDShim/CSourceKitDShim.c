@@ -78,43 +78,6 @@ bool swift_sourcekitd_variant_dictionary_apply(
     return ((Function)function)(*dictionary, swift_sourcekitd_variant_dictionary_apply_bridge, &bridgeContext);
 }
 
-int64_t swift_sourcekitd_variant_dictionary_get_int64(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key
-) {
-    typedef int64_t (*Function)(SwiftSourceKitDVariant, void *);
-    return ((Function)function)(*dict, key);
-}
-
-const char * swift_sourcekitd_variant_dictionary_get_string(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key
-) {
-    typedef const char * (*Function)(SwiftSourceKitDVariant, void *);
-    return ((Function)function)(*dict, key);
-}
-
-void * swift_sourcekitd_variant_dictionary_get_uid(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key
-) {
-    typedef void * (*Function)(SwiftSourceKitDVariant, void *);
-    return ((Function)function)(*dict, key);
-}
-
-void swift_sourcekitd_variant_dictionary_get_value(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key,
-    SwiftSourceKitDVariant *out
-) {
-    typedef SwiftSourceKitDVariant (*Function)(SwiftSourceKitDVariant, void *);
-    *out = ((Function)function)(*dict, key);
-}
-
 double swift_sourcekitd_variant_double_get_value(
     void *function,
     SwiftSourceKitDVariant * obj

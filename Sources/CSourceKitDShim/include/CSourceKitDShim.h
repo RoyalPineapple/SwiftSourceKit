@@ -50,27 +50,6 @@ bool swift_sourcekitd_variant_dictionary_apply(
     SwiftSourceKitDVariantDictionaryApplier applier,
     void *context
 );
-int64_t swift_sourcekitd_variant_dictionary_get_int64(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key
-);
-const char * swift_sourcekitd_variant_dictionary_get_string(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key
-);
-void * swift_sourcekitd_variant_dictionary_get_uid(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key
-);
-void swift_sourcekitd_variant_dictionary_get_value(
-    void *function,
-    SwiftSourceKitDVariant * dict,
-    void * key,
-    SwiftSourceKitDVariant *out
-);
 double swift_sourcekitd_variant_double_get_value(
     void *function,
     SwiftSourceKitDVariant * obj
