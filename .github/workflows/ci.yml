@@ -6,11 +6,46 @@ on:
   pull_request:
 
 jobs:
-  test:
+  shim-verify:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Generator self-test
         run: swift Tools/generate-sourcekitd-shim.swift --self-test
+      - name: Verify generated shim
+        run: |
+          swift Tools/generate-sourcekitd-shim.swift --verify \
+            --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h \
+            --output Sources/CSourceKitDShim
+
+  test-debug:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
       - name: Swift tests
         run: swift test
+
+  test-release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift tests
+        run: swift test -c release
+
+  sourcekitd-probe:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: SourceKitD probe
+        run: swift run SourceKitDProbe
+
+  test:
+    runs-on: macos-15
+    needs:
+      - shim-verify
+      - test-debug
+      - test-release
+      - sourcekitd-probe
+    steps:
+      - name: Required status compatibility
+        run: echo "All split CI checks passed"

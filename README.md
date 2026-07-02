@@ -28,15 +28,27 @@ Swift cannot directly model every `sourcekitd_variant_t` C ABI shape. The tiny C
 
 ```sh
 swift Tools/generate-sourcekitd-shim.swift --self-test
-swift Tools/generate-sourcekitd-shim.swift --verify --sourcekitd-header <path-to-sourcekitd.h> --output Sources/CSourceKitDShim
+swift Tools/generate-sourcekitd-shim.swift --verify \
+  --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h \
+  --output Sources/CSourceKitDShim
 ```
 
 The pinned header provenance is recorded in `Sources/CSourceKitDShim/sourcekitd-header-provenance.txt`.
+
+## SourceKitD Probe
+
+CI runs `SourceKitDProbe` outside the test process so sourcekitd ABI crashes fail in an isolated executable instead of taking down the Swift test runner.
+
+```sh
+swift run SourceKitDProbe
+swift run SourceKitDProbe --library-path /tmp/not-sourcekitd
+```
 
 ## Tests
 
 ```sh
 swift test
+swift test -c release
 ```
 
-Some tests query a live local `sourcekitd.framework` when it is available.
+Most unsafe-boundary coverage uses a fake sourcekitd dylib built from `Tests/Fixtures/FakeSourceKitD`. Some smoke tests query a live local `sourcekitd.framework` when it is available.

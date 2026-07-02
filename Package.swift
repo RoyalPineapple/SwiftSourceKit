@@ -9,6 +9,7 @@ let package = Package(
     ],
     products: [
         .library(name: "SwiftSourceKit", targets: ["SwiftSourceKit"]),
+        .executable(name: "SourceKitDProbe", targets: ["SourceKitDProbe"]),
     ],
     targets: [
         .target(
@@ -18,6 +19,11 @@ let package = Package(
         ),
         .target(
             name: "CSourceKitDShim"
+        ),
+        .executableTarget(
+            name: "SourceKitDProbe",
+            dependencies: ["SwiftSourceKit"],
+            swiftSettings: strictConcurrencySettings
         ),
         .testTarget(
             name: "SwiftSourceKitTests",

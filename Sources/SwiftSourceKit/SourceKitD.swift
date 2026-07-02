@@ -57,44 +57,54 @@ final class SourceKitD: @unchecked Sendable {
         switch value {
         case .dictionary(let dictionary):
             let object = functions.requestDictionaryCreate(nil, nil, 0)
-            for (key, value) in dictionary {
-                let uid = functions.uid(key.rawValue)
-                switch value {
-                case .string(let string):
-                    functions.requestDictionarySetString(object, uid, string)
-                case .int64(let int):
-                    functions.requestDictionarySetInt64(object, uid, int)
-                case .uid(let uidValue):
-                    functions.requestDictionarySetUID(object, uid, functions.uid(uidValue.rawValue))
-                case .array, .dictionary:
-                    let child = try makeObject(from: value)
-                    functions.requestDictionarySetValue(object, uid, child)
-                    // SourceKit's XPC path retains and in-process path stores ref-counted values.
-                    functions.requestRelease(child)
-                case .null, .bool, .double, .data:
-                    throw unsupportedRequestValue(value)
+            do {
+                for (key, value) in dictionary {
+                    let uid = functions.uid(key.rawValue)
+                    switch value {
+                    case .string(let string):
+                        functions.requestDictionarySetString(object, uid, string)
+                    case .int64(let int):
+                        functions.requestDictionarySetInt64(object, uid, int)
+                    case .uid(let uidValue):
+                        functions.requestDictionarySetUID(object, uid, functions.uid(uidValue.rawValue))
+                    case .array, .dictionary:
+                        let child = try makeObject(from: value)
+                        functions.requestDictionarySetValue(object, uid, child)
+                        // SourceKit's XPC path retains and in-process path stores ref-counted values.
+                        functions.requestRelease(child)
+                    case .null, .bool, .double, .data:
+                        throw unsupportedRequestValue(value)
+                    }
                 }
+            } catch {
+                functions.requestRelease(object)
+                throw error
             }
             return object
 
         case .array(let array):
             let object = functions.requestArrayCreate(nil, 0)
-            for value in array {
-                switch value {
-                case .string(let string):
-                    functions.requestArraySetString(object, .arrayAppendIndex, string)
-                case .int64(let int):
-                    functions.requestArraySetInt64(object, .arrayAppendIndex, int)
-                case .uid(let uidValue):
-                    functions.requestArraySetUID(object, .arrayAppendIndex, functions.uid(uidValue.rawValue))
-                case .array, .dictionary:
-                    let child = try makeObject(from: value)
-                    functions.requestArraySetValue(object, .arrayAppendIndex, child)
-                    // SourceKit's XPC path retains and in-process path stores ref-counted values.
-                    functions.requestRelease(child)
-                case .null, .bool, .double, .data:
-                    throw unsupportedRequestValue(value)
+            do {
+                for value in array {
+                    switch value {
+                    case .string(let string):
+                        functions.requestArraySetString(object, .arrayAppendIndex, string)
+                    case .int64(let int):
+                        functions.requestArraySetInt64(object, .arrayAppendIndex, int)
+                    case .uid(let uidValue):
+                        functions.requestArraySetUID(object, .arrayAppendIndex, functions.uid(uidValue.rawValue))
+                    case .array, .dictionary:
+                        let child = try makeObject(from: value)
+                        functions.requestArraySetValue(object, .arrayAppendIndex, child)
+                        // SourceKit's XPC path retains and in-process path stores ref-counted values.
+                        functions.requestRelease(child)
+                    case .null, .bool, .double, .data:
+                        throw unsupportedRequestValue(value)
+                    }
                 }
+            } catch {
+                functions.requestRelease(object)
+                throw error
             }
             return object
 
