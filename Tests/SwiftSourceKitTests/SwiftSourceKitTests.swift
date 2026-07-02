@@ -6,18 +6,19 @@ import Testing
 struct SwiftSourceKitTests {
     @Test
     func cursorInfoRequestBuildsTypedSourceKitValue() {
-        let file = URL(fileURLWithPath: "/tmp/Example.swift")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("Example.swift")
+        let sdk = FileManager.default.temporaryDirectory.appendingPathComponent("SDK")
         let request = CursorInfoRequest(
             location: SourceKitLocation(file: file, byteOffset: 12),
-            context: SourceKitBuildContext(compilerArguments: ["-sdk", "/tmp/SDK"])
+            context: SourceKitBuildContext(compilerArguments: ["-sdk", sdk.path])
         )
 
         #expect(request.value == .dictionary([
             .Key.request: .uid(.Request.cursorInfo),
-            .Key.name: .string("/tmp/Example.swift"),
-            .Key.sourceFile: .string("/tmp/Example.swift"),
+            .Key.name: .string(file.path),
+            .Key.sourceFile: .string(file.path),
             .Key.offset: .int64(12),
-            .Key.compilerArguments: .array([.string("-sdk"), .string("/tmp/SDK")]),
+            .Key.compilerArguments: .array([.string("-sdk"), .string(sdk.path)]),
         ]))
     }
 
