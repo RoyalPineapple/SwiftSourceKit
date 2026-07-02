@@ -9,28 +9,11 @@ typealias SKUID = OpaquePointer
 typealias SKVariant = SwiftSourceKitDVariant
 
 final class SourceKitD: @unchecked Sendable {
-    private let handle: UnsafeMutableRawPointer
     private let functions: Functions
 
     init(libraryPath: String?) throws {
         let path = libraryPath ?? Self.defaultLibraryPath()
-        guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL) else {
-            let message = dlerror().map { String(cString: $0) } ?? path
-            throw SourceKitError.sourceKitUnavailable(message)
-        }
-
-        do {
-            self.handle = handle
-            self.functions = try Functions(handle: handle)
-            Self.initializeOnce(self.functions.initialize)
-        } catch {
-            dlclose(handle)
-            throw error
-        }
-    }
-
-    deinit {
-        dlclose(handle)
+        self.functions = try Self.loadRuntimeFunctions(from: path)
     }
 
     func send(_ value: SourceKitValue) throws -> SourceKitValue {
@@ -57,46 +40,56 @@ final class SourceKitD: @unchecked Sendable {
         switch value {
         case .dictionary(let dictionary):
             let object = functions.requestDictionaryCreate(nil, nil, 0)
-            for (key, value) in dictionary {
-                let uid = functions.uid(key.rawValue)
-                switch value {
-                case .string(let string):
-                    functions.requestDictionarySetString(object, uid, string)
-                case .int64(let int):
-                    functions.requestDictionarySetInt64(object, uid, int)
-                case .uid(let uidValue):
-                    functions.requestDictionarySetUID(object, uid, functions.uid(uidValue.rawValue))
-                case .array, .dictionary:
-                    let child = try makeObject(from: value)
-                    functions.requestDictionarySetValue(object, uid, child)
-                    // SourceKit's XPC path retains and in-process path stores ref-counted values.
-                    functions.requestRelease(child)
-                case .null, .bool, .double, .data:
-                    throw unsupportedRequestValue(value)
+            do {
+                for (key, value) in dictionary {
+                    let uid = functions.uid(key.rawValue)
+                    switch value {
+                    case .string(let string):
+                        functions.requestDictionarySetString(object, uid, string)
+                    case .int64(let int):
+                        functions.requestDictionarySetInt64(object, uid, int)
+                    case .uid(let uidValue):
+                        functions.requestDictionarySetUID(object, uid, functions.uid(uidValue.rawValue))
+                    case .array, .dictionary:
+                        let child = try makeObject(from: value)
+                        functions.requestDictionarySetValue(object, uid, child)
+                        // SourceKit's XPC path retains and in-process path stores ref-counted values.
+                        functions.requestRelease(child)
+                    case .null, .bool, .double, .data:
+                        throw unsupportedRequestValue(value)
+                    }
                 }
+                return object
+            } catch {
+                functions.requestRelease(object)
+                throw error
             }
-            return object
 
         case .array(let array):
             let object = functions.requestArrayCreate(nil, 0)
-            for value in array {
-                switch value {
-                case .string(let string):
-                    functions.requestArraySetString(object, .arrayAppendIndex, string)
-                case .int64(let int):
-                    functions.requestArraySetInt64(object, .arrayAppendIndex, int)
-                case .uid(let uidValue):
-                    functions.requestArraySetUID(object, .arrayAppendIndex, functions.uid(uidValue.rawValue))
-                case .array, .dictionary:
-                    let child = try makeObject(from: value)
-                    functions.requestArraySetValue(object, .arrayAppendIndex, child)
-                    // SourceKit's XPC path retains and in-process path stores ref-counted values.
-                    functions.requestRelease(child)
-                case .null, .bool, .double, .data:
-                    throw unsupportedRequestValue(value)
+            do {
+                for value in array {
+                    switch value {
+                    case .string(let string):
+                        functions.requestArraySetString(object, .arrayAppendIndex, string)
+                    case .int64(let int):
+                        functions.requestArraySetInt64(object, .arrayAppendIndex, int)
+                    case .uid(let uidValue):
+                        functions.requestArraySetUID(object, .arrayAppendIndex, functions.uid(uidValue.rawValue))
+                    case .array, .dictionary:
+                        let child = try makeObject(from: value)
+                        functions.requestArraySetValue(object, .arrayAppendIndex, child)
+                        // SourceKit's XPC path retains and in-process path stores ref-counted values.
+                        functions.requestRelease(child)
+                    case .null, .bool, .double, .data:
+                        throw unsupportedRequestValue(value)
+                    }
                 }
+                return object
+            } catch {
+                functions.requestRelease(object)
+                throw error
             }
-            return object
 
         case .null, .bool, .double, .data:
             throw unsupportedRequestValue(value)
@@ -197,18 +190,119 @@ final class SourceKitD: @unchecked Sendable {
         return value.isEmpty ? nil : value
     }
 
-    private static let initializationState = Mutex(false)
+    private static let runtimeState = Mutex<InitializedRuntime?>(nil)
 
-    private static func initializeOnce(_ initialize: () -> Void) {
-        initializationState.withLock { isInitialized in
-            guard !isInitialized else {
-                return
+    private static func loadRuntimeFunctions(from path: String) throws -> Functions {
+        let canonicalPath = canonicalLibraryPath(path)
+        return try runtimeState.withLock { runtime in
+            if let runtime {
+                guard runtime.path == canonicalPath else {
+                    throw SourceKitError.incompatibleSourceKitD(
+                        "sourcekitd is already initialized from \(runtime.path); refusing to load \(canonicalPath) in the same process"
+                    )
+                }
+                return runtime.functions
             }
 
-            initialize()
-            isInitialized = true
+            guard let handle = dlopen(canonicalPath, RTLD_NOW | RTLD_LOCAL) else {
+                let message = dlerror().map { String(cString: $0) } ?? canonicalPath
+                throw SourceKitError.sourceKitUnavailable(message)
+            }
+
+            do {
+                let functions = try Functions(handle: handle)
+                try validateShimABI()
+                functions.initialize()
+                do {
+                    try validateLoadedRuntime(functions)
+                } catch {
+                    functions.shutdown()
+                    throw error
+                }
+                runtime = InitializedRuntime(path: canonicalPath, handle: handle, functions: functions)
+                return functions
+            } catch {
+                dlclose(handle)
+                throw error
+            }
         }
     }
+
+    private static func canonicalLibraryPath(_ path: String) -> String {
+        URL(fileURLWithPath: path)
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+            .path
+    }
+
+    private static func validateShimABI() throws {
+        let expectedVariantSize = 3 * MemoryLayout<UInt64>.size
+        guard MemoryLayout<SKVariant>.size == expectedVariantSize else {
+            throw SourceKitError.incompatibleSourceKitD(
+                "SwiftSourceKitDVariant is \(MemoryLayout<SKVariant>.size) bytes, expected \(expectedVariantSize)"
+            )
+        }
+
+        guard MemoryLayout<SKVariant>.alignment == MemoryLayout<UInt64>.alignment else {
+            throw SourceKitError.incompatibleSourceKitD(
+                "SwiftSourceKitDVariant alignment is \(MemoryLayout<SKVariant>.alignment), expected \(MemoryLayout<UInt64>.alignment)"
+            )
+        }
+
+        let pointerSize = MemoryLayout<UnsafeMutableRawPointer>.size
+        guard MemoryLayout<SKObject>.size == pointerSize,
+              MemoryLayout<SKResponse>.size == pointerSize,
+              MemoryLayout<SKUID>.size == pointerSize else {
+            throw SourceKitError.incompatibleSourceKitD("sourcekitd opaque handles do not match pointer size")
+        }
+    }
+
+    private static func validateLoadedRuntime(_ functions: Functions) throws {
+        let request = functions.requestDictionaryCreate(nil, nil, 0)
+        defer { functions.requestRelease(request) }
+
+        functions.requestDictionarySetUID(
+            request,
+            functions.uid(SourceKitUID.Key.request.rawValue),
+            functions.uid(SourceKitUID.Request.compilerVersion.rawValue)
+        )
+
+        guard let response = functions.sendRequestSync(request) else {
+            throw SourceKitError.incompatibleSourceKitD("compatibility probe returned no response")
+        }
+        defer { functions.responseDispose(response) }
+
+        if functions.responseIsError(response) != 0 {
+            let kind = functions.responseErrorGetKind(response)
+            let description = functions.responseErrorGetDescription(response)
+                .map { String(cString: $0) } ?? "unknown sourcekitd error"
+            throw SourceKitError.incompatibleSourceKitD("compatibility probe failed (\(kind)): \(description)")
+        }
+
+        let variant = functions.responseGetValue(response)
+        guard functions.variantGetType(variant) == VariantType.dictionary.rawValue else {
+            throw SourceKitError.incompatibleSourceKitD("compatibility probe did not return a dictionary response")
+        }
+
+        let decoded: SourceKitValue
+        do {
+            decoded = try decode(variant, functions: functions)
+        } catch {
+            throw SourceKitError.incompatibleSourceKitD("compatibility probe response could not be decoded: \(error)")
+        }
+
+        guard case .dictionary(let dictionary) = decoded,
+              case .int64 = dictionary[.Key.versionMajor] else {
+            throw SourceKitError.incompatibleSourceKitD("compatibility probe response did not include key.version_major")
+        }
+    }
+}
+
+private struct InitializedRuntime: @unchecked Sendable {
+    let path: String
+    // Keep the dlopen handle alive because sourcekitd initialization is process-global.
+    let handle: UnsafeMutableRawPointer
+    let functions: SourceKitD.Functions
 }
 
 private extension Int {
@@ -264,6 +358,7 @@ private let sourceKitDVariantDictionaryApplier:
 extension SourceKitD {
     struct Functions: @unchecked Sendable {
         let initialize: @convention(c) () -> Void
+        let shutdown: @convention(c) () -> Void
         let uidGetFromCString: @convention(c) (UnsafePointer<CChar>) -> SKUID
         let uidGetStringPointer: @convention(c) (SKUID) -> UnsafePointer<CChar>
         let requestDictionaryCreate: @convention(c) (UnsafePointer<SKUID?>?, UnsafePointer<SKObject?>?, Int) -> SKObject
@@ -304,6 +399,7 @@ extension SourceKitD {
 
         init(handle: UnsafeMutableRawPointer) throws {
             initialize = try Self.load(handle, "sourcekitd_initialize")
+            shutdown = try Self.load(handle, "sourcekitd_shutdown")
             uidGetFromCString = try Self.load(handle, "sourcekitd_uid_get_from_cstr")
             uidGetStringPointer = try Self.load(handle, "sourcekitd_uid_get_string_ptr")
             requestDictionaryCreate = try Self.load(handle, "sourcekitd_request_dictionary_create")
