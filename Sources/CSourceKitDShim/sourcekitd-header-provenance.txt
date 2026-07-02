@@ -1,0 +1,12 @@
+Generated from:
+https://github.com/swiftlang/swift/blob/d958d7dca38d6d69cbfb185dbf9b8056ebfc253e/tools/SourceKit/tools/sourcekitd/include/sourcekitd/sourcekitd.h
+
+Regenerate with:
+swift Tools/generate-sourcekitd-shim.swift --sourcekitd-header <path-to-pinned-sourcekitd.h> --output Sources/CSourceKitDShim
+
+Verify with:
+swift Tools/generate-sourcekitd-shim.swift --verify --sourcekitd-header <path-to-pinned-sourcekitd.h> --output Sources/CSourceKitDShim
+
+The generated shim must be regenerated when the loaded sourcekitd runtime comes
+from a different Swift/Xcode toolchain. Xcode ships sourcekitd.framework, but
+does not necessarily ship sourcekitd.h beside it.
