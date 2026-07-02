@@ -85,6 +85,25 @@ struct SwiftSourceKitTests {
     }
 
     @Test
+    func clientRejectsDifferentSourceKitDPathAfterInitialization() async throws {
+        let client: SourceKitClient
+        do {
+            client = try SourceKitClient(libraryPath: sourceKitDPath())
+        } catch SourceKitError.sourceKitUnavailable {
+            return
+        }
+
+        _ = try await client.compilerVersion()
+
+        do {
+            _ = try SourceKitClient(libraryPath: "/tmp/not-sourcekitd-\(UUID().uuidString)")
+            Issue.record("Expected incompatible sourcekitd runtime")
+        } catch SourceKitError.incompatibleSourceKitD(let message) {
+            #expect(message.contains("already initialized"))
+        }
+    }
+
+    @Test
     func unsupportedRequestValuesFailBeforeSourceKitRequest() async throws {
         let client: SourceKitClient
         do {
