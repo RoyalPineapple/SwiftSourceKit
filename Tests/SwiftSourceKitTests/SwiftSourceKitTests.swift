@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SwiftSourceKit
 
-@Suite("SwiftSourceKit")
+@Suite("SwiftSourceKit", .serialized)
 struct SwiftSourceKitTests {
     @Test
     func cursorInfoRequestBuildsTypedSourceKitValue() {
@@ -85,117 +85,21 @@ struct SwiftSourceKitTests {
     }
 
     @Test
-    func fakeRuntimeDecodesFullSourceKitValueSurface() async throws {
-        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
-
-        let value = try await client.send(.dictionary([
-            .Key.request: .uid("swift-sourcekit-test.full_surface"),
-        ]))
-
-        guard case .dictionary(let dictionary) = value else {
-            Issue.record("Expected dictionary response")
+    func clientRejectsDifferentSourceKitDPathAfterInitialization() async throws {
+        let client: SourceKitClient
+        do {
+            client = try SourceKitClient(libraryPath: sourceKitDPath())
+        } catch SourceKitError.sourceKitUnavailable {
             return
         }
-        #expect(dictionary["null"] == .null)
-        #expect(dictionary["int64"] == .int64(42))
-        #expect(dictionary["string"] == .string("hello"))
-        #expect(dictionary["uid"] == .uid("uid.value"))
-        #expect(dictionary["bool"] == .bool(true))
-        #expect(dictionary["double"] == .double(1.5))
-        #expect(dictionary["data"] == .data(Data([1, 2, 3])))
-        #expect(dictionary["array"] == .array([.string("first")]))
-        #expect(dictionary["dictionary"] == .dictionary(["nested.int": .int64(7)]))
-    }
 
-    @Test
-    func fakeRuntimeValidatesRequestEncodingAndPartialRequestCleanup() async throws {
-        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
+        _ = try await client.compilerVersion()
 
         do {
-            _ = try await client.send(.dictionary([
-                .Key.request: .uid("swift-sourcekit-test.encoding"),
-                "nested": .array([.string("kept"), .bool(true)]),
-            ]))
-            Issue.record("Expected invalid request")
-        } catch SourceKitError.invalidRequest {
-        }
-
-        let liveValues = try await client.send(.dictionary([
-            .Key.request: .uid("swift-sourcekit-test.live_values"),
-        ]))
-        #expect(liveValues == .int64(2))
-
-        let encoded = try await client.send(.dictionary([
-            .Key.request: .uid("swift-sourcekit-test.encoding"),
-            "name": .string("root"),
-            "uid": .uid("uid.request"),
-            "array": .array([
-                .string("first"),
-                .int64(2),
-                .dictionary(["deep": .string("value")]),
-            ]),
-            "nested": .dictionary(["child": .int64(9)]),
-        ]))
-        #expect(encoded == .string("ok"))
-    }
-
-    @Test
-    func fakeRuntimeMapsErrorAndDecodeFailures() async throws {
-        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
-
-        do {
-            _ = try await client.send(.dictionary([
-                .Key.request: .uid("swift-sourcekit-test.error"),
-            ]))
-            Issue.record("Expected sourcekitd error")
-        } catch SourceKitError.requestFailed(let kind, let description) {
-            #expect(kind == 22)
-            #expect(description == "synthetic sourcekitd error")
-        }
-
-        do {
-            _ = try await client.send(.dictionary([
-                .Key.request: .uid("swift-sourcekit-test.null_response"),
-            ]))
-            Issue.record("Expected null response failure")
-        } catch SourceKitError.requestFailed(let kind, let description) {
-            #expect(kind == -1)
-            #expect(description == "sourcekitd returned no response")
-        }
-
-        do {
-            _ = try await client.send(.dictionary([
-                .Key.request: .uid("swift-sourcekit-test.unsupported_variant"),
-            ]))
-            Issue.record("Expected unsupported variant failure")
-        } catch SourceKitError.responseDecodeFailed(let message) {
-            #expect(message.contains("unsupported sourcekitd variant type 99"))
-        }
-    }
-
-    @Test
-    func fakeRuntimeHandlesNullStringAndDataPointers() async throws {
-        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
-
-        let value = try await client.send(.dictionary([
-            .Key.request: .uid("swift-sourcekit-test.null_string_data"),
-        ]))
-
-        guard case .dictionary(let dictionary) = value else {
-            Issue.record("Expected dictionary response")
-            return
-        }
-        #expect(dictionary["string"] == .string(""))
-        #expect(dictionary["data"] == .data(Data()))
-    }
-
-    @Test
-    func missingFakeRuntimeSymbolFailsBeforeRequestsAreSent() throws {
-        do {
-            _ = try SourceKitClient(libraryPath: try fakeSourceKitDPath(omittingSend: true))
-            Issue.record("Expected missing symbol failure")
-        } catch SourceKitError.missingSymbol(let symbol) {
-            #expect(symbol == "sourcekitd_send_request_sync")
+            _ = try SourceKitClient(libraryPath: "/tmp/not-sourcekitd-\(UUID().uuidString)")
+            Issue.record("Expected incompatible sourcekitd runtime")
+        } catch SourceKitError.incompatibleSourceKitD(let message) {
+            #expect(message.contains("already initialized"))
         }
     }
 
@@ -256,6 +160,132 @@ struct SwiftSourceKitTests {
         )
 
         #expect(cursorInfo.name?.contains("answer") == true)
+    }
+
+    @Test
+    func fakeRuntimeDecodesFullSourceKitValueSurface() async throws {
+        SourceKitD.resetForTesting()
+        defer { SourceKitD.resetForTesting() }
+
+        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
+
+        let value = try await client.send(.dictionary([
+            .Key.request: .uid("swift-sourcekit-test.full_surface"),
+        ]))
+
+        guard case .dictionary(let dictionary) = value else {
+            Issue.record("Expected dictionary response")
+            return
+        }
+        #expect(dictionary["null"] == .null)
+        #expect(dictionary["int64"] == .int64(42))
+        #expect(dictionary["string"] == .string("hello"))
+        #expect(dictionary["uid"] == .uid("uid.value"))
+        #expect(dictionary["bool"] == .bool(true))
+        #expect(dictionary["double"] == .double(1.5))
+        #expect(dictionary["data"] == .data(Data([1, 2, 3])))
+        #expect(dictionary["array"] == .array([.string("first")]))
+        #expect(dictionary["dictionary"] == .dictionary(["nested.int": .int64(7)]))
+    }
+
+    @Test
+    func fakeRuntimeValidatesRequestEncodingAndPartialRequestCleanup() async throws {
+        defer { SourceKitD.resetForTesting() }
+
+        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
+
+        do {
+            _ = try await client.send(.dictionary([
+                .Key.request: .uid("swift-sourcekit-test.encoding"),
+                "nested": .array([.string("kept"), .bool(true)]),
+            ]))
+            Issue.record("Expected invalid request")
+        } catch SourceKitError.invalidRequest {
+        }
+
+        let liveValues = try await client.send(.dictionary([
+            .Key.request: .uid("swift-sourcekit-test.live_values"),
+        ]))
+        #expect(liveValues == .int64(2))
+
+        let encoded = try await client.send(.dictionary([
+            .Key.request: .uid("swift-sourcekit-test.encoding"),
+            "name": .string("root"),
+            "uid": .uid("uid.request"),
+            "array": .array([
+                .string("first"),
+                .int64(2),
+                .dictionary(["deep": .string("value")]),
+            ]),
+            "nested": .dictionary(["child": .int64(9)]),
+        ]))
+        #expect(encoded == .string("ok"))
+    }
+
+    @Test
+    func fakeRuntimeMapsErrorAndDecodeFailures() async throws {
+        defer { SourceKitD.resetForTesting() }
+
+        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
+
+        do {
+            _ = try await client.send(.dictionary([
+                .Key.request: .uid("swift-sourcekit-test.error"),
+            ]))
+            Issue.record("Expected sourcekitd error")
+        } catch SourceKitError.requestFailed(let kind, let description) {
+            #expect(kind == 22)
+            #expect(description == "synthetic sourcekitd error")
+        }
+
+        do {
+            _ = try await client.send(.dictionary([
+                .Key.request: .uid("swift-sourcekit-test.null_response"),
+            ]))
+            Issue.record("Expected null response failure")
+        } catch SourceKitError.requestFailed(let kind, let description) {
+            #expect(kind == -1)
+            #expect(description == "sourcekitd returned no response")
+        }
+
+        do {
+            _ = try await client.send(.dictionary([
+                .Key.request: .uid("swift-sourcekit-test.unsupported_variant"),
+            ]))
+            Issue.record("Expected unsupported variant failure")
+        } catch SourceKitError.responseDecodeFailed(let message) {
+            #expect(message.contains("unsupported sourcekitd variant type 99"))
+        }
+    }
+
+    @Test
+    func fakeRuntimeHandlesNullStringAndDataPointers() async throws {
+        defer { SourceKitD.resetForTesting() }
+
+        let client = try SourceKitClient(libraryPath: try fakeSourceKitDPath())
+
+        let value = try await client.send(.dictionary([
+            .Key.request: .uid("swift-sourcekit-test.null_string_data"),
+        ]))
+
+        guard case .dictionary(let dictionary) = value else {
+            Issue.record("Expected dictionary response")
+            return
+        }
+        #expect(dictionary["string"] == .string(""))
+        #expect(dictionary["data"] == .data(Data()))
+    }
+
+    @Test
+    func missingFakeRuntimeSymbolFailsBeforeRequestsAreSent() throws {
+        defer { SourceKitD.resetForTesting() }
+
+        do {
+            _ = try SourceKitClient(libraryPath: try fakeSourceKitDPath(omittingSend: true))
+            Issue.record("Expected missing symbol failure")
+        } catch SourceKitError.missingSymbol(let symbol) {
+            #expect(symbol == "sourcekitd_send_request_sync")
+        }
     }
 
     private func sourceKitDPath() -> String? {
