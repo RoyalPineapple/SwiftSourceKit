@@ -11,12 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Generator self-test
-        run: swift Tools/generate-sourcekitd-shim.swift --self-test
-      - name: Verify generated shim
+        run: |
+          swift Tools/generate-sourcekitd-shim.swift --self-test
+          swift Tools/generate-sourcekit-uid-constants.swift --self-test
+      - name: Verify generated files
         run: |
           swift Tools/generate-sourcekitd-shim.swift --verify \
             --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h \
             --output Sources/CSourceKitDShim
+          swift Tools/generate-sourcekit-uid-constants.swift --verify
 
   test-debug:
     runs-on: macos-15

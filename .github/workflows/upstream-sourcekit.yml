@@ -1,0 +1,51 @@
+name: Upstream SourceKit
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve upstream Swift commit
+        id: upstream
+        run: |
+          sha="$(gh api repos/swiftlang/swift/commits/main --jq .sha)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Refresh pinned SourceKit fixtures
+        run: swift Tools/update-sourcekit-fixtures.swift "${{ steps.upstream.outputs.sha }}"
+      - name: Verify generators
+        run: |
+          swift Tools/generate-sourcekitd-shim.swift --self-test
+          swift Tools/generate-sourcekitd-shim.swift --verify \
+            --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h \
+            --output Sources/CSourceKitDShim
+          swift Tools/generate-sourcekit-uid-constants.swift --self-test --verify
+      - name: Test
+        run: swift test
+      - name: Open draft PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ github.token }}
+          branch: codex/update-sourcekit-${{ steps.upstream.outputs.sha }}
+          commit-message: Update pinned SourceKit fixtures
+          title: Update pinned SourceKit fixtures
+          body: |
+            Updates generated SwiftSourceKit fixtures from swiftlang/swift@${{ steps.upstream.outputs.sha }}.
+
+            Generated with:
+            - `swift Tools/update-sourcekit-fixtures.swift ${{ steps.upstream.outputs.sha }}`
+            - `swift Tools/generate-sourcekitd-shim.swift --verify --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h --output Sources/CSourceKitDShim`
+            - `swift Tools/generate-sourcekit-uid-constants.swift --verify`
+            - `swift test`
+          draft: true
+          delete-branch: true
