@@ -93,21 +93,36 @@ struct SwiftSourceKitTests {
     }
 
     @Test
-    func sourceKitUIDProvidesFlatAliasesForAllBuiltInKeysAndRequests() {
+    func sourceKitUIDProvidesFlatAliasesForCommonKeysAndRequests() {
         #expect(SourceKitUID.request == .Key.request)
         #expect(SourceKitUID.sourceFile == .Key.sourceFile)
         #expect(SourceKitUID.offset == .Key.offset)
-        #expect(SourceKitUID.compilerArguments == .Key.compilerArguments)
+        #expect(SourceKitUID.compilerArguments == .Key.compilerArgs)
         #expect(SourceKitUID.name == .Key.name)
         #expect(SourceKitUID.usr == .Key.usr)
         #expect(SourceKitUID.typeName == .Key.typeName)
-        #expect(SourceKitUID.declarationFile == .Key.declarationFile)
-        #expect(SourceKitUID.declarationOffset == .Key.declarationOffset)
+        #expect(SourceKitUID.declarationFile == .Key.filePath)
+        #expect(SourceKitUID.declarationOffset == .Key.offset)
         #expect(SourceKitUID.versionMajor == .Key.versionMajor)
         #expect(SourceKitUID.versionMinor == .Key.versionMinor)
         #expect(SourceKitUID.versionPatch == .Key.versionPatch)
         #expect(SourceKitUID.cursorInfo == .Request.cursorInfo)
         #expect(SourceKitUID.compilerVersion == .Request.compilerVersion)
+    }
+
+    @Test
+    func sourceKitUIDCoversPinnedUpstreamProtocolSurface() {
+        #expect(SourceKitUID.Key.all.count == 208)
+        #expect(SourceKitUID.Request.all.count == 55)
+        #expect(SourceKitUID.Kind.all.count == 188)
+
+        #expect(SourceKitUID.Key.filePath.rawValue == "key.filepath")
+        #expect(SourceKitUID.Key.sourceText.rawValue == "key.sourcetext")
+        #expect(SourceKitUID.Key.vfsName.rawValue == "key.vfs.name")
+        #expect(SourceKitUID.Request.editorOpen.rawValue == "source.request.editor.open")
+        #expect(SourceKitUID.Request.semanticTokens.rawValue == "source.request.semantic_tokens")
+        #expect(SourceKitUID.Kind.declFunctionFree.rawValue == "source.lang.swift.decl.function.free")
+        #expect(SourceKitUID.Kind.macroRoleExpression.rawValue == "source.lang.swift.macro_role.expression")
     }
 
     @Test

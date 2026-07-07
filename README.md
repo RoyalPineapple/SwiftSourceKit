@@ -25,14 +25,24 @@ let version = try await client.compilerVersion()
 
 Swift cannot directly model every `sourcekitd_variant_t` C ABI shape. The tiny C shim in `Sources/CSourceKitDShim` is generated from a pinned `sourcekitd.h` slice.
 
+`SourceKitUID` constants are generated from Swift's pinned `utils/gyb_sourcekit_support/UIDs.py` protocol source, covering keys, requests, and kinds.
+
 ```sh
 swift Tools/generate-sourcekitd-shim.swift --self-test
 swift Tools/generate-sourcekitd-shim.swift --verify \
   --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h \
   --output Sources/CSourceKitDShim
+swift Tools/generate-sourcekit-uid-constants.swift --self-test
+swift Tools/generate-sourcekit-uid-constants.swift --verify
 ```
 
-The pinned header provenance is recorded in `Sources/CSourceKitDShim/sourcekitd-header-provenance.txt`.
+Pinned provenance is recorded in `Sources/CSourceKitDShim/sourcekitd-header-provenance.txt` and `Sources/SwiftSourceKit/sourcekit-uid-provenance.txt`.
+
+To intentionally move the wrapper to a newer upstream Swift SourceKit pin:
+
+```sh
+swift Tools/update-sourcekit-fixtures.swift <swift-commit-sha>
+```
 
 ## SourceKitD Probe
 
