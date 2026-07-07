@@ -14,24 +14,24 @@ struct SwiftSourceKitTests {
         )
 
         #expect(request.value == .dictionary([
-            .Key.request: .uid(.Request.cursorInfo),
-            .Key.name: .string(file.path),
-            .Key.sourceFile: .string(file.path),
-            .Key.offset: .int64(12),
-            .Key.compilerArguments: .array([.string("-sdk"), .string(sdk.path)]),
+            .request: .uid(.cursorInfo),
+            .name: .string(file.path),
+            .sourceFile: .string(file.path),
+            .offset: .int64(12),
+            .compilerArguments: .array([.string("-sdk"), .string(sdk.path)]),
         ]))
     }
 
     @Test
     func sourceKitResponseReadsFullValueSurface() {
-        let response = SourceKitResponse(value: .dictionary([
+        let response = SourceKitResponse(value: [
             "null": .null,
-            "bool": .bool(true),
-            "double": .double(1.5),
+            "bool": true,
+            "double": 1.5,
             "data": .data(Data([1, 2, 3])),
-            "array": .array([.string("value")]),
-            "dictionary": .dictionary(["child": .int64(7)]),
-        ]))
+            "array": ["value"],
+            "dictionary": ["child": 7],
+        ])
 
         #expect(response.dictionaryValue(for: "null") == .null)
         #expect(response.bool(for: "bool") == true)
@@ -39,6 +39,54 @@ struct SwiftSourceKitTests {
         #expect(response.data(for: "data") == Data([1, 2, 3]))
         #expect(response.array(for: "array") == [.string("value")])
         #expect(response.dictionary(for: "dictionary") == ["child": .int64(7)])
+    }
+
+    @Test
+    func sourceKitValueSupportsSwiftLiterals() {
+        let value: SourceKitValue = [
+            .request: .uid(.compilerVersion),
+            "string": "value",
+            "int": 1,
+            "bool": true,
+            "double": 1.25,
+            "array": ["child"],
+            "dictionary": ["nested": 2],
+        ]
+
+        #expect(value == .dictionary([
+            .request: .uid(.compilerVersion),
+            "string": .string("value"),
+            "int": .int64(1),
+            "bool": .bool(true),
+            "double": .double(1.25),
+            "array": .array([.string("child")]),
+            "dictionary": .dictionary(["nested": .int64(2)]),
+        ]))
+    }
+
+    @Test
+    func sourceKitValueBuildsRequestDictionary() {
+        #expect(SourceKitValue.request(.compilerVersion) == [
+            .request: .uid(.compilerVersion),
+        ])
+    }
+
+    @Test
+    func sourceKitUIDProvidesFlatAliasesForAllBuiltInKeysAndRequests() {
+        #expect(SourceKitUID.request == .Key.request)
+        #expect(SourceKitUID.sourceFile == .Key.sourceFile)
+        #expect(SourceKitUID.offset == .Key.offset)
+        #expect(SourceKitUID.compilerArguments == .Key.compilerArguments)
+        #expect(SourceKitUID.name == .Key.name)
+        #expect(SourceKitUID.usr == .Key.usr)
+        #expect(SourceKitUID.typeName == .Key.typeName)
+        #expect(SourceKitUID.declarationFile == .Key.declarationFile)
+        #expect(SourceKitUID.declarationOffset == .Key.declarationOffset)
+        #expect(SourceKitUID.versionMajor == .Key.versionMajor)
+        #expect(SourceKitUID.versionMinor == .Key.versionMinor)
+        #expect(SourceKitUID.versionPatch == .Key.versionPatch)
+        #expect(SourceKitUID.cursorInfo == .Request.cursorInfo)
+        #expect(SourceKitUID.compilerVersion == .Request.compilerVersion)
     }
 
     @Test
@@ -73,15 +121,13 @@ struct SwiftSourceKitTests {
             return
         }
 
-        let value = try await client.send(.dictionary([
-            .Key.request: .uid(.Request.compilerVersion),
-        ]))
+        let value = try await client.send(.request(.compilerVersion))
 
         guard case .dictionary(let dictionary) = value else {
             Issue.record("Expected dictionary response")
             return
         }
-        #expect(dictionary[.Key.versionMajor] != nil)
+        #expect(dictionary[.versionMajor] != nil)
     }
 
     @Test

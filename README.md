@@ -7,9 +7,7 @@ It exposes raw SourceKit request/response transport as typed Swift values, then 
 ```swift
 let client = try SourceKitClient()
 
-let raw = try await client.send(.dictionary([
-    .Key.request: .uid(.Request.compilerVersion),
-]))
+let raw = try await client.send(.request(.compilerVersion))
 
 let version = try await client.compilerVersion()
 ```
@@ -19,6 +17,7 @@ let version = try await client.compilerVersion()
 - `SourceKitClient.send(_:)` sends raw `SourceKitValue` requests and returns raw `SourceKitValue` responses.
 - `SourceKitClient.send<R: SourceKitRequest>(_:)` sends typed request wrappers.
 - `SourceKitValue` models every public response variant kind: null, dictionary, array, int64, string, uid, bool, double, and data.
+- `SourceKitValue` supports Swift dictionary, array, string, integer, boolean, and floating-point literals for raw requests.
 - Request encoding supports the public request constructors/setters exposed by `sourcekitd.h`: dictionary, array, string, int64, and uid.
 - Request-side null, bool, double, and data fail before SourceKit is called because the public request API does not expose constructors/setters for them.
 

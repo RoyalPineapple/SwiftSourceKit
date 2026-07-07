@@ -1,4 +1,19 @@
 public extension SourceKitUID {
+    static let request = Key.request
+    static let sourceFile = Key.sourceFile
+    static let offset = Key.offset
+    static let compilerArguments = Key.compilerArguments
+    static let name = Key.name
+    static let usr = Key.usr
+    static let typeName = Key.typeName
+    static let declarationFile = Key.declarationFile
+    static let declarationOffset = Key.declarationOffset
+    static let versionMajor = Key.versionMajor
+    static let versionMinor = Key.versionMinor
+    static let versionPatch = Key.versionPatch
+    static let cursorInfo = Request.cursorInfo
+    static let compilerVersion = Request.compilerVersion
+
     enum Key {
         public static let request: SourceKitUID = "key.request"
         public static let sourceFile: SourceKitUID = "key.sourcefile"

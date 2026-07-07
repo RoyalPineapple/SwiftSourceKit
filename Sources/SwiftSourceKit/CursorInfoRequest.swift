@@ -34,22 +34,22 @@ public struct CursorInfoRequest: SourceKitRequest {
     }
 
     public var value: SourceKitValue {
-        .dictionary([
-            .Key.request: .uid(.Request.cursorInfo),
-            .Key.name: .string(location.file.path),
-            .Key.sourceFile: .string(location.file.path),
-            .Key.offset: .int64(location.byteOffset),
-            .Key.compilerArguments: .array(context.compilerArguments.map(SourceKitValue.string)),
-        ])
+        [
+            .request: .uid(.cursorInfo),
+            .name: .string(location.file.path),
+            .sourceFile: .string(location.file.path),
+            .offset: .int64(location.byteOffset),
+            .compilerArguments: .array(context.compilerArguments.map(SourceKitValue.string)),
+        ]
     }
 
     public func decode(from response: SourceKitResponse) throws -> CursorInfo {
         CursorInfo(
-            name: response.string(for: .Key.name),
-            usr: response.string(for: .Key.usr),
-            typeName: response.string(for: .Key.typeName),
-            declarationFile: response.string(for: .Key.declarationFile),
-            declarationOffset: response.int64(for: .Key.declarationOffset)
+            name: response.string(for: .name),
+            usr: response.string(for: .usr),
+            typeName: response.string(for: .typeName),
+            declarationFile: response.string(for: .declarationFile),
+            declarationOffset: response.int64(for: .declarationOffset)
         )
     }
 }

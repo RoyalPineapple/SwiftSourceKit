@@ -24,6 +24,48 @@ public enum SourceKitValue: Equatable, Sendable {
     case data(Data)
 }
 
+extension SourceKitValue: ExpressibleByDictionaryLiteral {
+    public init(dictionaryLiteral elements: (SourceKitUID, SourceKitValue)...) {
+        self = .dictionary(Dictionary(elements, uniquingKeysWith: { _, new in new }))
+    }
+}
+
+extension SourceKitValue: ExpressibleByArrayLiteral {
+    public init(arrayLiteral elements: SourceKitValue...) {
+        self = .array(elements)
+    }
+}
+
+extension SourceKitValue: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = .string(value)
+    }
+}
+
+extension SourceKitValue: ExpressibleByIntegerLiteral {
+    public init(integerLiteral value: Int64) {
+        self = .int64(value)
+    }
+}
+
+extension SourceKitValue: ExpressibleByBooleanLiteral {
+    public init(booleanLiteral value: Bool) {
+        self = .bool(value)
+    }
+}
+
+extension SourceKitValue: ExpressibleByFloatLiteral {
+    public init(floatLiteral value: Double) {
+        self = .double(value)
+    }
+}
+
+public extension SourceKitValue {
+    static func request(_ request: SourceKitUID) -> SourceKitValue {
+        [.request: .uid(request)]
+    }
+}
+
 public struct SourceKitBuildContext: Equatable, Sendable {
     public let compilerArguments: [String]
 
