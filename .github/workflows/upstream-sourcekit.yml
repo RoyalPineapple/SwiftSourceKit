@@ -1,0 +1,56 @@
+name: Upstream SourceKit
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve upstream Swift commit
+        id: upstream
+        run: |
+          sha="$(gh api repos/swiftlang/swift/commits/main --jq .sha)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Refresh pinned SourceKit fixtures
+        run: swift Tools/update-sourcekit-fixtures.swift "${{ steps.upstream.outputs.sha }}"
+      - name: Verify generators
+        run: |
+          swift Tools/generate-sourcekitd-shim.swift --self-test
+          swift Tools/generate-sourcekitd-shim.swift --verify \
+            --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h \
+            --output Sources/CSourceKitDShim
+          swift Tools/generate-sourcekit-uid-constants.swift --self-test --verify
+      - name: Test
+        run: swift test
+      - name: Open draft PR
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            exit 0
+          fi
+
+          branch="codex/update-sourcekit-${{ steps.upstream.outputs.sha }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add .
+          git commit -m "Update pinned SourceKit fixtures"
+          git push --force-with-lease origin "$branch"
+          gh pr create \
+            --draft \
+            --base main \
+            --head "$branch" \
+            --title "Update pinned SourceKit fixtures" \
+            --body "Updates generated SwiftSourceKit fixtures from swiftlang/swift@${{ steps.upstream.outputs.sha }}." \
+            || gh pr view "$branch" --json number
+        env:
+          GH_TOKEN: ${{ github.token }}

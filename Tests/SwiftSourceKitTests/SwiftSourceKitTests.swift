@@ -14,24 +14,24 @@ struct SwiftSourceKitTests {
         )
 
         #expect(request.value == .dictionary([
-            .Key.request: .uid(.Request.cursorInfo),
-            .Key.name: .string(file.path),
-            .Key.sourceFile: .string(file.path),
-            .Key.offset: .int64(12),
-            .Key.compilerArguments: .array([.string("-sdk"), .string(sdk.path)]),
+            .request: .uid(.cursorInfo),
+            .name: .string(file.path),
+            .sourceFile: .string(file.path),
+            .offset: .int64(12),
+            .compilerArguments: .array([.string("-sdk"), .string(sdk.path)]),
         ]))
     }
 
     @Test
     func sourceKitResponseReadsFullValueSurface() {
-        let response = SourceKitResponse(value: .dictionary([
+        let response = SourceKitResponse(value: [
             "null": .null,
-            "bool": .bool(true),
-            "double": .double(1.5),
+            "bool": true,
+            "double": 1.5,
             "data": .data(Data([1, 2, 3])),
-            "array": .array([.string("value")]),
-            "dictionary": .dictionary(["child": .int64(7)]),
-        ]))
+            "array": ["value"],
+            "dictionary": ["child": 7],
+        ])
 
         #expect(response.dictionaryValue(for: "null") == .null)
         #expect(response.bool(for: "bool") == true)
@@ -39,6 +39,114 @@ struct SwiftSourceKitTests {
         #expect(response.data(for: "data") == Data([1, 2, 3]))
         #expect(response.array(for: "array") == [.string("value")])
         #expect(response.dictionary(for: "dictionary") == ["child": .int64(7)])
+    }
+
+    @Test
+    func sourceKitResponseReturnsNilForWrongShape() {
+        let response = SourceKitResponse(value: [
+            "string": "value",
+        ])
+
+        #expect(response.int64(for: "string") == nil)
+        #expect(response.dictionaryValue(for: "missing") == nil)
+        #expect(SourceKitResponse(value: "not a dictionary").string(for: "string") == nil)
+    }
+
+    @Test
+    func sourceKitValueSupportsSwiftLiterals() {
+        let value: SourceKitValue = [
+            .request: .uid(.compilerVersion),
+            "string": "value",
+            "int": 1,
+            "bool": true,
+            "double": 1.25,
+            "array": ["child"],
+            "dictionary": ["nested": 2],
+        ]
+
+        #expect(value == .dictionary([
+            .request: .uid(.compilerVersion),
+            "string": .string("value"),
+            "int": .int64(1),
+            "bool": .bool(true),
+            "double": .double(1.25),
+            "array": .array([.string("child")]),
+            "dictionary": .dictionary(["nested": .int64(2)]),
+        ]))
+    }
+
+    @Test
+    func sourceKitValueDictionaryLiteralUsesLastDuplicateKey() {
+        let value: SourceKitValue = [
+            "key": 1,
+            "key": 2,
+        ]
+
+        #expect(value == ["key": 2])
+    }
+
+    @Test
+    func sourceKitValueBuildsRequestDictionary() {
+        #expect(SourceKitValue.request(.compilerVersion) == [
+            .request: .uid(.compilerVersion),
+        ])
+    }
+
+    @Test
+    func sourceKitUIDProvidesFlatAliasesForCommonKeysAndRequests() {
+        #expect(SourceKitUID.request == .Key.request)
+        #expect(SourceKitUID.sourceFile == .Key.sourceFile)
+        #expect(SourceKitUID.offset == .Key.offset)
+        #expect(SourceKitUID.compilerArguments == .Key.compilerArgs)
+        #expect(SourceKitUID.name == .Key.name)
+        #expect(SourceKitUID.usr == .Key.usr)
+        #expect(SourceKitUID.typeName == .Key.typeName)
+        #expect(SourceKitUID.declarationFile == .Key.filePath)
+        #expect(SourceKitUID.declarationOffset == .Key.offset)
+        #expect(SourceKitUID.versionMajor == .Key.versionMajor)
+        #expect(SourceKitUID.versionMinor == .Key.versionMinor)
+        #expect(SourceKitUID.versionPatch == .Key.versionPatch)
+        #expect(SourceKitUID.cursorInfo == .Request.cursorInfo)
+        #expect(SourceKitUID.compilerVersion == .Request.compilerVersion)
+    }
+
+    @Test
+    func sourceKitUIDCoversRepresentativePinnedUpstreamConstants() {
+        #expect(SourceKitUID.Key.filePath.rawValue == "key.filepath")
+        #expect(SourceKitUID.Key.sourceText.rawValue == "key.sourcetext")
+        #expect(SourceKitUID.Key.vfsName.rawValue == "key.vfs.name")
+        #expect(SourceKitUID.Request.editorOpen.rawValue == "source.request.editor.open")
+        #expect(SourceKitUID.Request.semanticTokens.rawValue == "source.request.semantic_tokens")
+        #expect(SourceKitUID.Kind.declFunctionFree.rawValue == "source.lang.swift.decl.function.free")
+        #expect(SourceKitUID.Kind.macroRoleExpression.rawValue == "source.lang.swift.macro_role.expression")
+    }
+
+    @Test
+    func unsafeSwiftInteropIsBoxedInSourceKitDInterop() throws {
+        let sourceDirectory = packageRoot().appendingPathComponent("Sources/SwiftSourceKit")
+        let files = try FileManager.default.contentsOfDirectory(
+            at: sourceDirectory,
+            includingPropertiesForKeys: nil
+        )
+            .filter { $0.pathExtension == "swift" }
+
+        let unsafePatterns = [
+            "import CSourceKitDShim",
+            "OpaquePointer",
+            "Unsafe",
+            "unsafeBitCast",
+            "dlopen",
+            "dlsym",
+            "swift_sourcekitd_",
+            "@convention(c)",
+        ]
+
+        for file in files where file.lastPathComponent != "SourceKitDInterop.swift" {
+            let contents = try String(contentsOf: file, encoding: .utf8)
+            for pattern in unsafePatterns {
+                #expect(!contents.contains(pattern), "\(pattern) leaked into \(file.lastPathComponent)")
+            }
+        }
     }
 
     @Test
@@ -73,15 +181,13 @@ struct SwiftSourceKitTests {
             return
         }
 
-        let value = try await client.send(.dictionary([
-            .Key.request: .uid(.Request.compilerVersion),
-        ]))
+        let value = try await client.send(.request(.compilerVersion))
 
         guard case .dictionary(let dictionary) = value else {
             Issue.record("Expected dictionary response")
             return
         }
-        #expect(dictionary[.Key.versionMajor] != nil)
+        #expect(dictionary[.versionMajor] != nil)
     }
 
     @Test
@@ -192,4 +298,11 @@ private extension String {
         }
         return utf8.distance(from: utf8.startIndex, to: range.lowerBound.samePosition(in: utf8)!)
     }
+}
+
+private func packageRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
 }

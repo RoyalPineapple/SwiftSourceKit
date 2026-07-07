@@ -16,16 +16,14 @@ public struct CompilerVersionRequest: SourceKitRequest {
     public init() {}
 
     public var value: SourceKitValue {
-        .dictionary([
-            .Key.request: .uid(.Request.compilerVersion),
-        ])
+        .request(.compilerVersion)
     }
 
     public func decode(from response: SourceKitResponse) throws -> CompilerVersion {
         CompilerVersion(
-            major: response.int64(for: .Key.versionMajor),
-            minor: response.int64(for: .Key.versionMinor),
-            patch: response.int64(for: .Key.versionPatch)
+            major: response.int64(for: .versionMajor),
+            minor: response.int64(for: .versionMinor),
+            patch: response.int64(for: .versionPatch)
         )
     }
 }

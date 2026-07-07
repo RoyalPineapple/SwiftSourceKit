@@ -7,9 +7,7 @@ It exposes raw SourceKit request/response transport as typed Swift values, then 
 ```swift
 let client = try SourceKitClient()
 
-let raw = try await client.send(.dictionary([
-    .Key.request: .uid(.Request.compilerVersion),
-]))
+let raw = try await client.send(.request(.compilerVersion))
 
 let version = try await client.compilerVersion()
 ```
@@ -19,6 +17,7 @@ let version = try await client.compilerVersion()
 - `SourceKitClient.send(_:)` sends raw `SourceKitValue` requests and returns raw `SourceKitValue` responses.
 - `SourceKitClient.send<R: SourceKitRequest>(_:)` sends typed request wrappers.
 - `SourceKitValue` models every public response variant kind: null, dictionary, array, int64, string, uid, bool, double, and data.
+- `SourceKitValue` supports Swift dictionary, array, string, integer, boolean, and floating-point literals for raw requests.
 - Request encoding supports the public request constructors/setters exposed by `sourcekitd.h`: dictionary, array, string, int64, and uid.
 - Request-side null, bool, double, and data fail before SourceKit is called because the public request API does not expose constructors/setters for them.
 
@@ -26,14 +25,28 @@ let version = try await client.compilerVersion()
 
 Swift cannot directly model every `sourcekitd_variant_t` C ABI shape. The tiny C shim in `Sources/CSourceKitDShim` is generated from a pinned `sourcekitd.h` slice.
 
+`SourceKitUID` constants are generated from Swift's pinned `utils/gyb_sourcekit_support/UIDs.py` protocol source, covering keys, requests, and kinds.
+
 ```sh
 swift Tools/generate-sourcekitd-shim.swift --self-test
 swift Tools/generate-sourcekitd-shim.swift --verify \
   --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h \
   --output Sources/CSourceKitDShim
+swift Tools/generate-sourcekit-uid-constants.swift --self-test
+swift Tools/generate-sourcekit-uid-constants.swift --verify
 ```
 
-The pinned header provenance is recorded in `Sources/CSourceKitDShim/sourcekitd-header-provenance.txt`.
+Pinned provenance is recorded in `Sources/CSourceKitDShim/sourcekitd-header-provenance.txt` and `Tests/Fixtures/sourcekit/upstream-provenance.txt`.
+
+To intentionally move the wrapper to a newer upstream Swift SourceKit pin:
+
+```sh
+swift Tools/update-sourcekit-fixtures.swift <swift-commit-sha>
+```
+
+The `Upstream SourceKit` workflow runs nightly and can also be triggered by hand.
+It refreshes fixtures from `swiftlang/swift@main`, regenerates checked-in files,
+runs tests, and opens a draft PR when anything changes.
 
 ## SourceKitD Probe
 
