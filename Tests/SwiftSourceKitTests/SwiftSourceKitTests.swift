@@ -42,6 +42,17 @@ struct SwiftSourceKitTests {
     }
 
     @Test
+    func sourceKitResponseReturnsNilForWrongShape() {
+        let response = SourceKitResponse(value: [
+            "string": "value",
+        ])
+
+        #expect(response.int64(for: "string") == nil)
+        #expect(response.dictionaryValue(for: "missing") == nil)
+        #expect(SourceKitResponse(value: "not a dictionary").string(for: "string") == nil)
+    }
+
+    @Test
     func sourceKitValueSupportsSwiftLiterals() {
         let value: SourceKitValue = [
             .request: .uid(.compilerVersion),
@@ -62,6 +73,16 @@ struct SwiftSourceKitTests {
             "array": .array([.string("child")]),
             "dictionary": .dictionary(["nested": .int64(2)]),
         ]))
+    }
+
+    @Test
+    func sourceKitValueDictionaryLiteralUsesLastDuplicateKey() {
+        let value: SourceKitValue = [
+            "key": 1,
+            "key": 2,
+        ]
+
+        #expect(value == ["key": 2])
     }
 
     @Test
@@ -87,6 +108,34 @@ struct SwiftSourceKitTests {
         #expect(SourceKitUID.versionPatch == .Key.versionPatch)
         #expect(SourceKitUID.cursorInfo == .Request.cursorInfo)
         #expect(SourceKitUID.compilerVersion == .Request.compilerVersion)
+    }
+
+    @Test
+    func unsafeSwiftInteropIsBoxedInSourceKitDInterop() throws {
+        let sourceDirectory = packageRoot().appendingPathComponent("Sources/SwiftSourceKit")
+        let files = try FileManager.default.contentsOfDirectory(
+            at: sourceDirectory,
+            includingPropertiesForKeys: nil
+        )
+            .filter { $0.pathExtension == "swift" }
+
+        let unsafePatterns = [
+            "import CSourceKitDShim",
+            "OpaquePointer",
+            "Unsafe",
+            "unsafeBitCast",
+            "dlopen",
+            "dlsym",
+            "swift_sourcekitd_",
+            "@convention(c)",
+        ]
+
+        for file in files where file.lastPathComponent != "SourceKitDInterop.swift" {
+            let contents = try String(contentsOf: file, encoding: .utf8)
+            for pattern in unsafePatterns {
+                #expect(!contents.contains(pattern), "\(pattern) leaked into \(file.lastPathComponent)")
+            }
+        }
     }
 
     @Test
@@ -238,4 +287,11 @@ private extension String {
         }
         return utf8.distance(from: utf8.startIndex, to: range.lowerBound.samePosition(in: utf8)!)
     }
+}
+
+private func packageRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
 }
