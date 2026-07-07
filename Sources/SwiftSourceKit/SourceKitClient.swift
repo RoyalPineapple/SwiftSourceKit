@@ -1,14 +1,14 @@
 import Foundation
 
 public actor SourceKitClient {
-    private let bridge: SourceKitD
+    private let runtime: SourceKitDRuntime
 
     public init(libraryPath: String? = nil) throws {
-        self.bridge = try SourceKitD(libraryPath: libraryPath)
+        self.runtime = try SourceKitDRuntime(libraryPath: libraryPath)
     }
 
     public func send(_ request: SourceKitValue) async throws -> SourceKitValue {
-        try bridge.send(request)
+        try await runtime.send(request)
     }
 
     public func send<Request: SourceKitRequest>(
