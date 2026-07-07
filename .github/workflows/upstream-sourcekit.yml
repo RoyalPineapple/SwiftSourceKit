@@ -33,19 +33,24 @@ jobs:
       - name: Test
         run: swift test
       - name: Open draft PR
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ github.token }}
-          branch: codex/update-sourcekit-${{ steps.upstream.outputs.sha }}
-          commit-message: Update pinned SourceKit fixtures
-          title: Update pinned SourceKit fixtures
-          body: |
-            Updates generated SwiftSourceKit fixtures from swiftlang/swift@${{ steps.upstream.outputs.sha }}.
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            exit 0
+          fi
 
-            Generated with:
-            - `swift Tools/update-sourcekit-fixtures.swift ${{ steps.upstream.outputs.sha }}`
-            - `swift Tools/generate-sourcekitd-shim.swift --verify --sourcekitd-header Tests/Fixtures/sourcekitd/sourcekitd.h --output Sources/CSourceKitDShim`
-            - `swift Tools/generate-sourcekit-uid-constants.swift --verify`
-            - `swift test`
-          draft: true
-          delete-branch: true
+          branch="codex/update-sourcekit-${{ steps.upstream.outputs.sha }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add .
+          git commit -m "Update pinned SourceKit fixtures"
+          git push --force-with-lease origin "$branch"
+          gh pr create \
+            --draft \
+            --base main \
+            --head "$branch" \
+            --title "Update pinned SourceKit fixtures" \
+            --body "Updates generated SwiftSourceKit fixtures from swiftlang/swift@${{ steps.upstream.outputs.sha }}." \
+            || gh pr view "$branch" --json number
+        env:
+          GH_TOKEN: ${{ github.token }}

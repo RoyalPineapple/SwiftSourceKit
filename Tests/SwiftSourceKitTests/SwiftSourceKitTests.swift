@@ -111,11 +111,7 @@ struct SwiftSourceKitTests {
     }
 
     @Test
-    func sourceKitUIDCoversPinnedUpstreamProtocolSurface() {
-        #expect(SourceKitUID.Key.all.count == 208)
-        #expect(SourceKitUID.Request.all.count == 55)
-        #expect(SourceKitUID.Kind.all.count == 188)
-
+    func sourceKitUIDCoversRepresentativePinnedUpstreamConstants() {
         #expect(SourceKitUID.Key.filePath.rawValue == "key.filepath")
         #expect(SourceKitUID.Key.sourceText.rawValue == "key.sourcetext")
         #expect(SourceKitUID.Key.vfsName.rawValue == "key.vfs.name")

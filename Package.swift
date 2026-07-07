@@ -15,7 +15,6 @@ let package = Package(
         .target(
             name: "SwiftSourceKit",
             dependencies: ["CSourceKitDShim"],
-            exclude: ["sourcekit-uid-provenance.txt"],
             swiftSettings: strictConcurrencySettings
         ),
         .target(

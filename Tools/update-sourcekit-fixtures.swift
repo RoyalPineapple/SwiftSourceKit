@@ -3,9 +3,11 @@
 import Foundation
 
 let repository = "https://raw.githubusercontent.com/swiftlang/swift"
-let defaultCommit = "0ea5523c8c90706d7da2478c7e950eaa62414b20"
 
-let commit = CommandLine.arguments.dropFirst().first ?? defaultCommit
+guard let commit = CommandLine.arguments.dropFirst().first else {
+    fputs("usage: update-sourcekit-fixtures.swift <swift-commit-sha>\n", stderr)
+    exit(1)
+}
 let files = [
     (
         upstream: "tools/SourceKit/tools/sourcekitd/include/sourcekitd/sourcekitd.h",
@@ -82,7 +84,7 @@ try headerProvenance.write(
     encoding: .utf8
 )
 try uidProvenance.write(
-    toFile: "Sources/SwiftSourceKit/sourcekit-uid-provenance.txt",
+    toFile: "Tests/Fixtures/sourcekit/upstream-provenance.txt",
     atomically: true,
     encoding: .utf8
 )

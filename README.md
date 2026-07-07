@@ -36,13 +36,17 @@ swift Tools/generate-sourcekit-uid-constants.swift --self-test
 swift Tools/generate-sourcekit-uid-constants.swift --verify
 ```
 
-Pinned provenance is recorded in `Sources/CSourceKitDShim/sourcekitd-header-provenance.txt` and `Sources/SwiftSourceKit/sourcekit-uid-provenance.txt`.
+Pinned provenance is recorded in `Sources/CSourceKitDShim/sourcekitd-header-provenance.txt` and `Tests/Fixtures/sourcekit/upstream-provenance.txt`.
 
 To intentionally move the wrapper to a newer upstream Swift SourceKit pin:
 
 ```sh
 swift Tools/update-sourcekit-fixtures.swift <swift-commit-sha>
 ```
+
+The `Upstream SourceKit` workflow runs nightly and can also be triggered by hand.
+It refreshes fixtures from `swiftlang/swift@main`, regenerates checked-in files,
+runs tests, and opens a draft PR when anything changes.
 
 ## SourceKitD Probe
 
