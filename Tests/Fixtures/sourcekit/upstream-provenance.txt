@@ -1,7 +1,7 @@
 Pinned upstream Swift sourcekitd protocol UID source.
 
 Repository: https://github.com/swiftlang/swift
-Commit: 0ea5523c8c90706d7da2478c7e950eaa62414b20
+Commit: 9a325cfe98407b4404b542e1b304ed865aff51c9
 Source: utils/gyb_sourcekit_support/UIDs.py
 Fixture: Tests/Fixtures/sourcekit/UIDs.py
 
