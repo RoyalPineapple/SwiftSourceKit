@@ -1,5 +1,5 @@
 Generated from:
-https://github.com/swiftlang/swift/blob/0ea5523c8c90706d7da2478c7e950eaa62414b20/tools/SourceKit/tools/sourcekitd/include/sourcekitd/sourcekitd.h
+https://github.com/swiftlang/swift/blob/d06df163fb9e1030e218674378689ce7ad887e9c/tools/SourceKit/tools/sourcekitd/include/sourcekitd/sourcekitd.h
 
 Pinned local fixture:
 Tests/Fixtures/sourcekitd/sourcekitd.h
